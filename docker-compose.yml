@@ -1,0 +1,37 @@
+services:
+  sonarqube:
+    image: sonarqube:community
+    container_name: sonarqube
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+
+  app:
+    build: .
+    container_name: app
+    working_dir: /workspace/
+    volumes:
+      - .:/workspace
+    command: >
+      sh -c "PYTHONPATH=/workspace/smartmove coverage run --source=smartmove -m pytest &&
+             coverage xml -o /workspace/coverage.xml"
+
+  scanner:
+    image: sonarsource/sonar-scanner-cli
+    container_name: sonar-scanner
+    depends_on:
+      - sonarqube
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      SONAR_HOST_URL: http://sonarqube:9000
+      SONAR_TOKEN: squ_f881571f284b267d798f7e8284f07b6cc21919fa
+
+volumes:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:

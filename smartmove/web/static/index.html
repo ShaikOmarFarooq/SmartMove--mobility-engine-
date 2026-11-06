@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartMove Control Center</title>
+<style>
+  :root {
+    --bg:#f5f6f8; --surface:#fff; --text:#1c2230; --muted:#6a7385; --border:#e1e4ea;
+    --accent:#2563eb; --accent-text:#fff;
+    --available:#16a34a; --reserved:#0891b2; --in_use:#2563eb; --maintenance:#d97706;
+    --emergency_lock:#dc2626; --relocating:#7c3aed;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12151c; --surface:#1b2029; --text:#e6e9ef; --muted:#8b94a7; --border:#2a3140; --accent:#3b82f6; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; align-items:center; gap:16px; padding:12px 20px; background:var(--surface); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  nav { display:flex; gap:4px; flex:1; }
+  nav button { background:none; border:0; padding:8px 14px; border-radius:6px; color:var(--muted); cursor:pointer; font:inherit; }
+  nav button.active { background:var(--accent); color:var(--accent-text); }
+  main { max-width:1150px; margin:20px auto; padding:0 20px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
+  .card, .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+  .card .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .card .value { font-size:26px; font-weight:600; margin-top:2px; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; margin-bottom:16px; }
+  h2 { font-size:15px; margin:0 0 10px; }
+  .bar-row { display:flex; align-items:center; gap:8px; margin:6px 0; }
+  .bar-row .name { width:110px; color:var(--muted); }
+  .bar-row .track { flex:1; height:10px; background:var(--bg); border-radius:5px; overflow:hidden; }
+  .bar-row .fill { height:100%; border-radius:5px; background:var(--accent); }
+  .bar-row .num { width:60px; text-align:right; font-variant-numeric:tabular-nums; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  td.mono, .mono { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; color:#fff; background:var(--muted); }
+  .badge.available{background:var(--available)} .badge.reserved{background:var(--reserved)} .badge.in_use{background:var(--in_use)}
+  .badge.maintenance{background:var(--maintenance)} .badge.emergency_lock{background:var(--emergency_lock)} .badge.relocating{background:var(--relocating)}
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  input, select, button.btn { font:inherit; padding:7px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); }
+  button.btn { cursor:pointer; }
+  button.btn.primary { background:var(--accent); color:var(--accent-text); border-color:var(--accent); }
+  button.btn.danger { background:var(--emergency_lock); color:#fff; border-color:var(--emergency_lock); }
+  button.btn:disabled { opacity:.5; cursor:default; }
+  .pager { display:flex; align-items:center; gap:10px; margin-top:12px; color:var(--muted); }
+  .scroll { overflow-x:auto; }
+  .hidden { display:none; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:10px 16px; border-radius:8px; color:#fff; background:var(--available); z-index:20; max-width:90vw; }
+  .toast.err { background:var(--emergency_lock); }
+  dialog { border:1px solid var(--border); border-radius:12px; background:var(--surface); color:var(--text); padding:20px; width:min(460px,92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.4); }
+  dl { display:grid; grid-template-columns:110px 1fr; gap:6px 10px; margin:0 0 14px; }
+  dt { color:var(--muted); } dd { margin:0; word-break:break-all; }
+  .rule { font-size:12px; color:var(--muted); margin-top:10px; padding:8px 10px; background:var(--bg); border-radius:6px; }
+  .verify-ok { color:var(--available); } .verify-bad { color:var(--emergency_lock); }
+  .pill { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
+  .dot.on { background:var(--available); }
+  .meter { display:inline-block; width:60px; height:6px; background:var(--bg); border-radius:3px; vertical-align:middle; overflow:hidden; margin-right:6px; }
+  .meter > i { display:block; height:100%; background:var(--available); }
+  .meter.low > i { background:var(--emergency_lock); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛴 SmartMove</h1>
+  <nav id="nav">
+    <button data-tab="dashboard" class="active">Dashboard</button>
+    <button data-tab="vehicles">Vehicles</button>
+    <button data-tab="rentals">Rentals</button>
+    <button data-tab="audit">Audit log</button>
+  </nav>
+  <span class="pill"><span class="dot" id="simDot"></span><span id="simLabel">Simulation off</span></span>
+  <button class="btn" id="simBtn">Start simulation</button>
+</header>
+
+<main>
+  <!-- Dashboard -->
+  <section id="tab-dashboard">
+    <div class="cards" id="statCards"></div>
+    <div class="grid2">
+      <div class="panel"><h2>Vehicle state</h2><div id="byState"></div></div>
+      <div class="panel"><h2>Cities</h2><div id="byCity"></div></div>
+      <div class="panel"><h2>Vehicle type</h2><div id="byType"></div></div>
+      <div class="panel">
+        <h2>City rules</h2>
+        <p><b>London</b> – £5 congestion charge added to every bill.</p>
+        <p><b>Milan</b> – helmet must be detected before unlocking.</p>
+        <p><b>Rome</b> – vehicles may not enter the restricted zone (lat &gt; 41.9).</p>
+        <p class="rule">Telemetry safety: temperature &gt; 60 °C locks the vehicle and ends the rental; battery &lt; 5 % ends the rental and sends the vehicle to maintenance.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Vehicles -->
+  <section id="tab-vehicles" class="hidden">
+    <div class="toolbar">
+      <input id="vSearch" placeholder="Search vehicle ID…">
+      <select id="vCity"><option value="">All cities</option><option>london</option><option>milan</option><option>rome</option></select>
+      <select id="vType"><option value="">All types</option><option>bike</option><option>scooter</option><option>moped</option></select>
+      <select id="vState"><option value="">All states</option></select>
+    </div>
+    <div class="panel scroll">
+      <table><thead><tr><th>ID</th><th>Type</th><th>City</th><th>State</th><th>Battery</th><th>Temp</th><th></th></tr></thead>
+      <tbody id="vBody"></tbody></table>
+      <div class="pager"><button class="btn" id="vPrev">‹ Prev</button><span id="vInfo"></span><button class="btn" id="vNext">Next ›</button></div>
+    </div>
+  </section>
+
+  <!-- Rentals -->
+  <section id="tab-rentals" class="hidden">
+    <div class="panel scroll">
+      <h2>Active rentals <span id="rCount" style="color:var(--muted);font-weight:400"></span></h2>
+      <table><thead><tr><th>Vehicle</th><th>User</th><th>City</th><th>Duration</th><th>Cost so far</th><th></th></tr></thead>
+      <tbody id="rBody"></tbody></table>
+    </div>
+  </section>
+
+  <!-- Audit -->
+  <section id="tab-audit" class="hidden">
+    <div class="toolbar">
+      <input id="aSearch" placeholder="Filter by vehicle ID…">
+      <button class="btn primary" id="verifyBtn">Verify integrity</button>
+      <span id="verifyResult" style="align-self:center"></span>
+    </div>
+    <div class="panel scroll">
+      <table><thead><tr><th>#</th><th>Time</th><th>Entity</th><th>Action</th><th>Reason</th><th>Checksum</th></tr></thead>
+      <tbody id="aBody"></tbody></table>
+      <div class="pager"><span id="aInfo"></span></div>
+    </div>
+  </section>
+</main>
+
+<!-- Vehicle dialog -->
+<dialog id="vDialog">
+  <h2 id="dTitle">Vehicle</h2>
+  <dl id="dInfo"></dl>
+  <div id="dStart">
+    <label for="dUser" style="color:var(--muted)">Start rental as user</label>
+    <div class="toolbar" style="margin-top:6px">
+      <select id="dUser" style="flex:1"></select>
+      <button class="btn primary" id="dStartBtn">Unlock</button>
+    </div>
+  </div>
+  <div id="dEnd" class="hidden"><button class="btn danger" id="dEndBtn">End rental</button></div>
+  <div class="rule" id="dRule"></div>
+  <div style="text-align:right;margin-top:14px"><button class="btn" id="dClose">Close</button></div>
+</dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (url, opts) => {
+  const res = await fetch(url, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+};
+const post = (url, body) => api(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+const STATES = ['available','reserved','in_use','maintenance','emergency_lock','relocating'];
+const label = s => s.replace('_',' ');
+const short = id => id.length > 14 ? id.slice(0,10) + '…' + id.slice(-4) : id;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const badge = s => `<span class="badge ${s}">${label(s)}</span>`;
+const fmtDur = s => `${Math.floor(s/60)}m ${String(s%60).padStart(2,'0')}s`;
+const meter = b => `<span class="meter ${b<15?'low':''}"><i style="width:${Math.max(0,Math.min(100,b))}%"></i></span>${b}%`;
+const RULES = {
+  london:'London: a £5.00 congestion charge is added when the rental ends.',
+  milan:'Milan: unlocking requires the helmet sensor to detect a helmet.',
+  rome:'Rome: movement into the restricted zone locks the vehicle and ends the rental.'
+};
+
+function toast(msg, err) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (err ? ' err' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+// ---- Tabs ----
+let tab = 'dashboard';
+$('#nav').addEventListener('click', e => {
+  if (!e.target.dataset.tab) return;
+  tab = e.target.dataset.tab;
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b === e.target));
+  document.querySelectorAll('main > section').forEach(s => s.classList.toggle('hidden', s.id !== 'tab-' + tab));
+  refresh();
+});
+
+// ---- Dashboard ----
+function bars(el, data, colorVar) {
+  const total = Object.values(data).reduce((a,b) => a+b, 0) || 1;
+  el.innerHTML = Object.entries(data).sort((a,b) => b[1]-a[1]).map(([k,v]) =>
+    `<div class="bar-row"><span class="name">${label(k)}</span><span class="track"><span class="fill" style="width:${v/total*100}%;${colorVar?`background:var(--${k})`:''}"></span></span><span class="num">${v.toLocaleString()}</span></div>`).join('');
+}
+async function loadDashboard() {
+  const s = await api('/api/summary');
+  $('#statCards').innerHTML = [
+    ['Vehicles', s.total_vehicles.toLocaleString()],
+    ['Users', s.total_users.toLocaleString()],
+    ['Active rentals', s.active_rentals.toLocaleString()],
+    ['Avg battery', s.avg_battery + '%'],
+    ['Low battery (&lt;15%)', s.low_battery.toLocaleString()],
+  ].map(([l,v]) => `<div class="card"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
+  bars($('#byState'), s.by_state, true);
+  bars($('#byCity'), s.by_city);
+  bars($('#byType'), s.by_type);
+  setSim(s.simulation_running);
+}
+
+// ---- Simulation toggle ----
+let simOn = false;
+function setSim(on) {
+  simOn = on;
+  $('#simDot').classList.toggle('on', on);
+  $('#simLabel').textContent = on ? 'Simulation running' : 'Simulation off';
+  $('#simBtn').textContent = on ? 'Stop simulation' : 'Start simulation';
+}
+$('#simBtn').onclick = async () => {
+  try { setSim((await post('/api/simulation', {running: !simOn})).simulation_running); }
+  catch (e) { toast(e.message, true); }
+};
+
+// ---- Vehicles ----
+let vOffset = 0, vTotal = 0;
+const VLIMIT = 25;
+$('#vState').innerHTML += STATES.map(s => `<option value="${s}">${label(s)}</option>`).join('');
+async function loadVehicles() {
+  const p = new URLSearchParams({
+    q:$('#vSearch').value, city:$('#vCity').value, type:$('#vType').value, state:$('#vState').value,
+    limit:VLIMIT, offset:vOffset
+  });
+  const d = await api('/api/vehicles?' + p);
+  vTotal = d.total;
+  $('#vBody').innerHTML = d.items.map(v => `<tr>
+    <td class="mono" title="${esc(v.id)}">${esc(short(v.id))}</td><td>${v.type}</td><td>${v.city}</td>
+    <td>${badge(v.state)}</td><td>${meter(v.battery)}</td><td>${v.temperature}°C</td>
+    <td><button class="btn" data-id="${esc(v.id)}">Details</button></td></tr>`).join('')
+    || '<tr><td colspan="7" style="color:var(--muted)">No vehicles match.</td></tr>';
+  const end = Math.min(vOffset + VLIMIT, vTotal);
+  $('#vInfo').textContent = `${vTotal ? vOffset+1 : 0}–${end} of ${vTotal.toLocaleString()}`;
+  $('#vPrev').disabled = vOffset === 0;
+  $('#vNext').disabled = end >= vTotal;
+}
+['vSearch','vCity','vType','vState'].forEach(id => $('#'+id).addEventListener('input', () => { vOffset = 0; loadVehicles(); }));
+$('#vPrev').onclick = () => { vOffset = Math.max(0, vOffset - VLIMIT); loadVehicles(); };
+$('#vNext').onclick = () => { vOffset += VLIMIT; loadVehicles(); };
+$('#vBody').addEventListener('click', e => { if (e.target.dataset.id) openVehicle(e.target.dataset.id); });
+
+// ---- Vehicle dialog ----
+let current = null;
+async function openVehicle(id) {
+  try {
+    const v = await api('/api/vehicles/' + encodeURIComponent(id));
+    current = v;
+    $('#dTitle').textContent = `${v.type} · ${v.city}`;
+    $('#dInfo').innerHTML = `
+      <dt>ID</dt><dd class="mono">${esc(v.id)}</dd>
+      <dt>State</dt><dd>${badge(v.state)}</dd>
+      <dt>Battery</dt><dd>${meter(v.battery)}</dd>
+      <dt>Temperature</dt><dd>${v.temperature}°C</dd>
+      <dt>GPS</dt><dd>${v.gps[0]}, ${v.gps[1]}</dd>
+      <dt>Helmet</dt><dd>${v.helmet_present ? 'detected' : 'not detected'}</dd>
+      ${v.active_rental ? `<dt>Renter</dt><dd>${esc(v.active_rental.user_name)}</dd>` : ''}`;
+    $('#dRule').textContent = RULES[v.city];
+    const available = v.state === 'available';
+    $('#dStart').classList.toggle('hidden', !available);
+    $('#dEnd').classList.toggle('hidden', !v.active_rental);
+    if (available) {
+      const users = await api('/api/users?limit=30');
+      $('#dUser').innerHTML = users.items.map(u => `<option value="${esc(u.id)}">${esc(u.name)} (${esc(u.id.slice(2,8))})</option>`).join('');
+    }
+    $('#vDialog').showModal();
+  } catch (e) { toast(e.message, true); }
+}
+$('#dClose').onclick = () => $('#vDialog').close();
+$('#dStartBtn').onclick = async () => {
+  try {
+    await post('/api/rentals/start', {user_id:$('#dUser').value, vehicle_id:current.id});
+    toast('Rental started'); $('#vDialog').close(); refresh();
+  } catch (e) { toast(e.message, true); }
+};
+$('#dEndBtn').onclick = async () => {
+  try {
+    const r = await post('/api/rentals/end', {vehicle_id:current.id});
+    toast(`Rental ended · cost £${r.cost.toFixed(2)}`); $('#vDialog').close(); refresh();
+  } catch (e) { toast(e.message, true); }
+};
+
+// ---- Rentals ----
+async function loadRentals() {
+  const d = await api('/api/rentals');
+  $('#rCount').textContent = `(${d.items.length})`;
+  $('#rBody').innerHTML = d.items.map(r => `<tr>
+    <td class="mono" title="${esc(r.vehicle_id)}">${esc(short(r.vehicle_id))}</td><td>${esc(r.user_name)}</td><td>${r.city}</td>
+    <td>${fmtDur(r.duration_seconds)}</td><td>£${r.running_cost.toFixed(2)}</td>
+    <td><button class="btn danger" data-end="${esc(r.vehicle_id)}">End</button></td></tr>`).join('')
+    || '<tr><td colspan="6" style="color:var(--muted)">No active rentals.</td></tr>';
+}
+$('#rBody').addEventListener('click', async e => {
+  const id = e.target.dataset.end;
+  if (!id) return;
+  try { const r = await post('/api/rentals/end', {vehicle_id:id}); toast(`Rental ended · cost £${r.cost.toFixed(2)}`); loadRentals(); }
+  catch (err) { toast(err.message, true); }
+});
+
+// ---- Audit ----
+async function loadAudit() {
+  const d = await api('/api/audit?limit=100&entity=' + encodeURIComponent($('#aSearch').value));
+  $('#aBody').innerHTML = d.items.map(e => `<tr>
+    <td>${e.id}</td><td>${esc(e.timestamp.replace('T',' ').slice(0,19))}</td>
+    <td class="mono" title="${esc(e.entity_id)}">${esc(short(e.entity_id))}</td><td>${esc(e.action)}</td><td>${esc(e.reason)}</td>
+    <td class="mono" title="prev: ${esc(e.previous_checksum)}">${esc(e.checksum.slice(0,10))}…</td></tr>`).join('')
+    || '<tr><td colspan="6" style="color:var(--muted)">No entries.</td></tr>';
+  $('#aInfo').textContent = `Showing latest ${d.items.length} of ${d.total.toLocaleString()} entries`;
+}
+$('#aSearch').addEventListener('input', loadAudit);
+$('#verifyBtn').onclick = async () => {
+  try {
+    const r = await api('/api/audit/verify');
+    $('#verifyResult').className = r.ok ? 'verify-ok' : 'verify-bad';
+    $('#verifyResult').textContent = (r.ok ? '✓ ' : '✗ ') + r.message;
+  } catch (e) { toast(e.message, true); }
+};
+
+// ---- Refresh loop ----
+function refresh() {
+  const loaders = {dashboard:loadDashboard, vehicles:loadVehicles, rentals:loadRentals, audit:loadAudit};
+  loaders[tab]().catch(e => toast(e.message, true));
+}
+refresh();
+loadDashboard();
+setInterval(() => { if (!$('#vDialog').open) refresh(); }, 3000);
+</script>
+</body>
+</html>
