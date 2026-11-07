@@ -1,7 +1,7 @@
 # SmartMove – Core Engine
 
 SmartMove is the backend engine of a shared-mobility. It manages a fleet of
-10,000 bikes, e-scooters and mopeds across **London, Milan and Rome**, applies
+10,000 bikes, e-scooters and mopeds across London, Milan and Rome, applies
 city-specific rules, processes asynchronous telemetry, and keeps a tamper-evident
 audit trail. A small web frontend lets you inspect and operate the system.
 
