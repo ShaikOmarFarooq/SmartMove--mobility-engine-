@@ -96,65 +96,7 @@ coverage xml -o coverage.xml
 Or with Docker: `docker compose up app` (SonarQube and scanner services are also
 defined in `docker-compose.yml`).
 
-## Project structure
 
-```
-data/
-  vehicles.json         persisted fleet
-  users.json            persisted users
-  audit.log             append-only, checksum-chained audit trail
-smartmove/
-  main.py               headless entry point (simulation)
-  core/
-    controller.py       SmartMoveCentralController (facade)
-    state_machine.py    valid vehicle state transitions
-    pricing.py          per-minute pricing (0.25 / min)
-    event_bus.py, event_processor.py, events.py
-    services/
-      rental_service.py     start/end/terminate rentals, city rules
-      telemetry_service.py  telemetry-driven safety logic
-  domain/               Vehicle, User, Rental, enums, telemetry types
-  rules/                London, Milan and Rome city rules
-  persistence/
-    storage.py          atomic JSON load/save
-    audit_log.py        thread-safe audit log with checksum chain
-  simulation/           fleet/user/telemetry factories, workers, rental simulator
-  web/
-    server.py           stdlib HTTP server + JSON API
-    static/index.html   single-page frontend
-tests/                  pytest suite
-```
-
-## Architecture overview
-
-```
- Rental simulator ─┐                          ┌─> RentalService ───┐
-                   ├─> EventBus ─> EventProcessor                  ├─> AuditLog
- Telemetry workers ┘                          └─> TelemetryService ┘
-                                   ▲
- Web frontend ──> HTTP API ────────┘ (calls the controller directly)
-```
-
-Producers (simulators and the web API) never modify vehicles unprotected: every state
-change happens while holding the vehicle's own lock.
-
-## Web API
-
-All responses are JSON. Errors return `{"error": "..."}` with status 404 (not found),
-409 (business rule violated, e.g. vehicle unavailable or helmet missing) or 400.
-
-| Method | Path                     | Description                                   |
-|--------|--------------------------|-----------------------------------------------|
-| GET    | `/api/summary`           | Fleet statistics                              |
-| GET    | `/api/vehicles`          | List; query: `city`, `state`, `type`, `q`, `limit`, `offset` |
-| GET    | `/api/vehicles/<id>`     | Vehicle details and active rental             |
-| GET    | `/api/users`             | List users; query: `q`, `limit`               |
-| GET    | `/api/rentals`           | Active rentals                                |
-| GET    | `/api/audit`             | Latest entries; query: `limit`, `entity`      |
-| GET    | `/api/audit/verify`      | Verify the checksum chain                     |
-| POST   | `/api/rentals/start`     | Body: `{"user_id", "vehicle_id"}`             |
-| POST   | `/api/rentals/end`       | Body: `{"vehicle_id"}`                        |
-| POST   | `/api/simulation`        | Body: `{"running": true/false}`               |
 
 ## Troubleshooting
 
